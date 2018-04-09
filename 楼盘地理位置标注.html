@@ -1,0 +1,362 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8" />
+<html>
+<title>百度地图测试</title>
+
+
+<link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+<link href="https://cdn.bootcss.com/bootstrap-table/1.12.1/bootstrap-table.css" rel="stylesheet">
+<link href="https://cdn.bootcss.com/x-editable/1.5.1/bootstrap-editable/css/bootstrap-editable.css" rel="stylesheet">
+<link rel="stylesheet" href="http://api.map.baidu.com/library/SearchInfoWindow/1.5/src/SearchInfoWindow_min.css" />
+<style>
+    .baidu-maps label {
+        max-width: none;
+    }
+</style>
+
+<script type="text/javascript" src="http://api.map.baidu.com/getscript?v=2.0&ak=eOaQGdcXRmZ7Bi9FBHYeqnC3mHPc9bx1"></script>
+<script type="text/javascript" src="http://api.map.baidu.com/library/DistanceTool/1.2/src/DistanceTool_min.js"></script>
+<script type="text/javascript" src="http://api.map.baidu.com/library/SearchInfoWindow/1.5/src/SearchInfoWindow_min.js"></script>
+<script src="https://cdn.bootcss.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+<script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+
+<!--百度地图 -->
+<script src="https://cdn.bootcss.com/bootstrap-table/1.12.1/bootstrap-table.min.js"></script>
+<script src="https://cdn.bootcss.com/bootstrap-table/1.12.1/locale/bootstrap-table-zh-CN.js"></script>
+
+<body>
+<div>
+
+    <div style="width: 250px ;margin:5px;float: left">
+        <!--输入框  -->
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="输入感兴趣的地方" id="suggestId">
+            <div id="searchResultPanel" style="border:1px solid #C0C0C0;width:150px;height:auto; display:none;"></div>
+        </div><!-- /input-group -->
+
+        <!-- 表格 -->
+        <div>
+            <table id="table"
+                   data-toggle="table"
+                   data-toolbar="#toolbar"
+                   data-id-field="id"
+                   data-height="300">
+            </table>
+        </div>
+
+
+        <div>
+            <!--功能1：直线测距 -->
+            <p></p>
+            <div style="border: solid 1px;border-color: #ddd;border-width: 2px">
+                <p></p>
+                <span class="label label-primary">功能1：测距</span></br>
+                <button class="btn btn-primary" type="button" onclick="calDistance()">两点直线测距 ( 右键取消 ) </button>
+                <p></p>
+            </div>
+
+            <!-- 功能2 ：驾车路线规划  -->
+            <p></p>
+            <div style="border: solid 1px;border-color: #ddd;border-width: 2px">
+                <p></p>
+                <span class="label label-primary">功能2：规划驾车路线</span>
+                <div class="input-group">
+                    <input type="text" class="form-control" placeholder="输入起点名称" id="startpoint">
+                    <p></p>
+                    <input type="text" class="form-control" placeholder="输入终点名称" id="endpoint">
+                    <p> </p>
+                </div><!-- /input-group -->
+                <p></p>
+                <div>
+                    <button  class="btn btn-primary" type="button" onclick="drivingroute()">两点驾车路线规划</button>
+                    <p></p>
+                </div>
+
+                <p></p>
+                <div class="alert alert-info" role="alert" id="showcarroute"></div>
+                <p></p>
+            </div>
+        </div>
+
+    </div>
+            <!--https://www.cnblogs.com/weihuang6620/p/6235687.html-->
+            <div style="height:900px;border:#ccc solid 1px;margin: 2px" class="baidu-maps" id="dituContent"></div>
+            <!--地图展示-->
+
+</div>
+
+</body>
+<script type="text/javascript">
+
+    // --------------------------------------------------------------------
+    // 初始化 table  table
+    var $table = $('#table');
+    function initTable() {
+        $table.bootstrapTable({
+            columns: [
+                {
+                    title: '名字',
+                    field: 'id',
+                    align: 'center',
+                    valign: 'middle',
+                } ,
+                {
+                    title: '操作',
+                    field: 'operate',
+                    align: 'center',
+                    events: operateEvents,
+                    formatter: operateFormatter
+                }
+            ]
+        });
+
+        $(window).resize(function () {
+            $table.bootstrapTable('resetView', {
+                height: getHeight()
+            });
+        });
+    }
+
+    function operateFormatter(value, row, index) {
+        return [
+            '<a class="remove" href="javascript:void(0)" title="Remove">',
+            '<i class="glyphicon glyphicon-remove"></i>',
+            '</a>'
+        ].join('');
+    }
+
+    window.operateEvents = {
+        'click .remove': function (e, value, row, index) {
+            $table.bootstrapTable('remove', {
+                field: 'id',
+                values: [row.id]
+            });
+            deletePoint(row.id);
+        }
+    };
+
+    function getHeight() {
+        console.log("height"+$(window).height() - $('h1').outerHeight(true));
+//        return $(window).height()*0.3 - $('h1').outerHeight(true);
+        return $(window).height()*0.3;
+    }
+    initTable();
+
+//----------------------------------------------------------------------
+    //地图设置  map  map  map
+    var map = new BMap.Map("dituContent");//在百度地图容器中创建一个地图
+    //创建地图函数：
+
+    function createMap(){
+        var map = new BMap.Map("dituContent");//在百度地图容器中创建一个地图
+        var point = new BMap.Point(116.331398,39.897445);
+        map.centerAndZoom(point,12);
+        var geolocation = new BMap.Geolocation();
+        geolocation.getCurrentPosition(function(r){
+            if(this.getStatus() == BMAP_STATUS_SUCCESS){
+                var mk = new BMap.Marker(r.point);
+                map.addOverlay(mk);
+                var label = new BMap.Label("当前位置（浏览器定位不是很准）",{offset:new BMap.Size(20,-10)});
+                mk.setLabel(label);
+                map.panTo(r.point);
+                console.log('您的位置：'+r.point.lng+','+r.point.lat);
+            }
+            else {
+                console.log('failed'+this.getStatus());
+            }
+        },{enableHighAccuracy: true})
+        window.map = map;//将map变量存储在全局
+    }
+    //地图事件设置函数：
+    function setMapEvent(){
+        map.enableDragging();//启用地图拖拽事件，默认启用(可不写)
+        map.enableScrollWheelZoom();//启用地图滚轮放大缩小
+        map.enableDoubleClickZoom();//启用鼠标双击放大，默认启用(可不写)
+        map.enableKeyboard();//启用键盘上下左右键移动地图
+    }
+    //地图控件添加函数：
+    function addMapControl(){
+        //向地图中添加缩放控件
+//        var ctrl_nav = new BMap.NavigationControl({anchor:BMAP_ANCHOR_TOP_LEFT,type:BMAP_NAVIGATION_CONTROL_LARGE,enableGeolocation: true});
+//        map.addControl(ctrl_nav);
+        //向地图中添加缩略图控件
+        var ctrl_ove = new BMap.OverviewMapControl({anchor:BMAP_ANCHOR_BOTTOM_RIGHT,isOpen:1});
+        map.addControl(ctrl_ove);
+        //向地图中添加比例尺控件
+        var ctrl_sca = new BMap.ScaleControl({anchor:BMAP_ANCHOR_BOTTOM_LEFT});
+        map.addControl(ctrl_sca);
+        var geolocationControl = new BMap.GeolocationControl();
+        geolocationControl.addEventListener("locationSuccess", function(e){
+            // 定位成功事件
+            var address = '';
+            address += e.addressComponent.province;
+            address += e.addressComponent.city;
+            address += e.addressComponent.district;
+            address += e.addressComponent.street;
+            address += e.addressComponent.streetNumber;
+            console.log("当前定位地址为：" + address);
+        });
+        geolocationControl.addEventListener("locationError",function(e){
+            // 定位失败事件
+            console.log(e.message);
+        });
+        map.addControl(geolocationControl);
+    }
+    //创建和初始化地图函数：
+    function initMap(){
+        createMap();//创建地图
+        setMapEvent();//设置地图事件
+        addMapControl();//向地图添加控件
+    }
+    initMap();//创建和初始化地图
+
+
+// --------------------------------------------------------------------
+// 搜索自动提示
+// 百度地图API功能
+    function G(id) {
+        return document.getElementById(id);
+    }
+
+    var ac = new BMap.Autocomplete(    //建立一个自动完成的对象
+        {"input" : "suggestId"
+            ,"location" : map
+        });
+    ac.addEventListener("onhighlight", function(e) {  //鼠标放在下拉列表上的事件
+        var str = "";
+        var _value = e.fromitem.value;
+        var value = "";
+        if (e.fromitem.index > -1) {
+            value = _value.province +  _value.city +  _value.district +  _value.street +  _value.business;
+        }
+        str = "FromItem<br />index = " + e.fromitem.index + "<br />value = " + value;
+        value = "";
+        if (e.toitem.index > -1) {
+            _value = e.toitem.value;
+            value = _value.province +  _value.city +  _value.district +  _value.street +  _value.business;
+        }
+        str += "<br />ToItem <br />index = " + e.toitem.index + "<br />value = " + value;
+        G("searchResultPanel").innerHTML = str;
+    });
+
+    var myValue;
+    ac.addEventListener("onconfirm", function(e) {    //鼠标点击下拉列表后的事件
+        var _value = e.item.value;
+        myValue = _value.province +  _value.city +  _value.district +  _value.street +  _value.business;
+        G("searchResultPanel").innerHTML ="onconfirm<br />index = " + e.item.index + "<br />myValue = " + myValue;
+        setPlace();
+        document.getElementById("suggestId").value = '';
+    });
+
+    function setPlace(){
+        function myFun(){
+            var pp = local.getResults().getPoi(0).point;    //获取第一个智能搜索的结果
+            map.centerAndZoom(pp, 12);
+            addMarker(pp,myValue);
+            // 点击备选框之后 直接添加
+            var $table = $('#table')
+            $table.bootstrapTable('insertRow', {
+                index: 1,
+                row: {
+                    id: myValue,
+                }
+            });
+        }
+        var local = new BMap.LocalSearch(map, { //智能搜索
+            onSearchComplete: myFun
+        });
+        local.search(myValue);
+    }
+// --------------------------------------------------------------------
+// 开始自定义函数
+//----------------------------------------------------------------------
+// 编写自定义函数,创建标注
+    function addMarker(point,content){
+        if (content == ''){
+            alert("label 不能为空");
+        }else {
+//            //创建检索信息窗口对象
+//            var searchInfoWindow = null;
+//            searchInfoWindow = new BMapLib.SearchInfoWindow(map, content, {
+//                title  : content,      //标题
+//                panel  : "panel",         //检索结果面板
+//                width  : 300,
+//                enableAutoPan : true,     //自动平移
+//                searchTypes   :[
+//                    BMAPLIB_TAB_SEARCH,   //周边检索
+//                    BMAPLIB_TAB_TO_HERE,  //到这里去
+//                    BMAPLIB_TAB_FROM_HERE //从这里出发
+//                ]
+//            });
+
+            var marker = new BMap.Marker(point);
+//            marker.addEventListener("click", function(e){
+//                searchInfoWindow.open(marker);
+//            })
+            map.addOverlay(marker);
+            var label = new BMap.Label(content,{offset:new BMap.Size(20,-10)});
+            marker.setLabel(label);
+        }
+    }
+
+    // 删除点
+    function deletePoint(label){
+        var allOverlay = map.getOverlays();
+        for (var i = 0; i < allOverlay.length;i++){
+            if(allOverlay[i]=='[object Marker]'){
+                if(allOverlay[i].getLabel()!=null){
+                    if(allOverlay[i].getLabel().content == label){
+                        map.removeOverlay(allOverlay[i]);
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    // 直线测距
+    function calDistance() {
+        var myDis = new BMapLib.DistanceTool(map);
+        myDis.open();
+    }
+
+    // 驾车路线规划
+    function drivingroute() {
+        var output = '';
+        var startpoint = document.getElementById("startpoint").value;
+        var endpoint = document.getElementById("endpoint").value;
+        if (startpoint == '' || endpoint == ''){
+            alert("请输入起点和终点");
+        }else {
+            var searchComplete = function (results){
+                if (transit.getStatus() != BMAP_STATUS_SUCCESS){
+                    return ;
+                }
+                var plan = results.getPlan(0);
+                //获取时间
+                output += startpoint +"——" +endpoint +"\n";
+                output += "总路程为：" ;
+                output += plan.getDistance(true) + "\n";             //获取距离
+                output += "总时间为：" ;
+                output += plan.getDuration(true) + "\n";
+            }
+
+            var transit = new BMap.DrivingRoute(map, {
+                renderOptions: {
+                    map: map,
+                    panel: "r-result",
+//                    enableDragging : true //起终点可进行拖拽
+                },
+                onSearchComplete: searchComplete,
+                onPolylinesSet: function(){
+                    $("#showcarroute").append(output + "</br>");
+                }
+            });
+//            output = '';
+            transit.search(startpoint,endpoint);
+
+        }
+    }
+    
+</script>
+</html>
